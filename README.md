@@ -4,9 +4,9 @@
 ## A Large-scale Video Dataset Improving Consistency between Fine-grained Conditions and Video Content
 
 
-Qiuheng Wang<sup>1,2*</sup>, [Yukai Shi](https://shiyukai26.github.io/info/)<sup>1,3*</sup>, Jiarong Ou<sup>1</sup>, Rui Chen<sup>1</sup>,  [Haotian Yang](https://yanght321.github.io/)<sup>1</sup>, Mingwu Zheng<sup>1</sup>, [Fei Yang](https://yfalan.github.io/)<sup>1</sup>,  [Pengfei Wan](https://scholar.google.com/citations?hl=zh-CN&user=P6MraaYAAAAJ)<sup>1</sup> Di Zhang<sup>1</sup>, <br>
+Qiuheng Wang<sup>1,2*</sup>, [Yukai Shi](https://shiyukai26.github.io/info/)<sup>1,3*</sup>, Jiarong Ou<sup>1</sup>, Rui Chen<sup>1</sup>,  [Haotian Yang](https://yanght321.github.io/)<sup>1</sup>, Mingwu Zheng<sup>1</sup>, [Xin Tao](https://www.xtao.website/)<sup>1</sup>, [Fei Yang](https://yfalan.github.io/)<sup>1 †</sup>,  [Pengfei Wan](https://scholar.google.com/citations?hl=zh-CN&user=P6MraaYAAAAJ)<sup>1</sup> Di Zhang<sup>1</sup>, <br>
 
-<sup>1</sup>Kuaishou Technology  <sup>2</sup>Shenzhen University  <sup>3</sup>Tsinghua University   <sup>*</sup>Equal contribution
+<sup>1</sup>Kuaishou Technology  <sup>2</sup>Shenzhen University  <sup>3</sup>Tsinghua University   <sup>*</sup>Equal contribution  <sup>†</sup>Corresponding author
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b.svg)](https://arxiv.org/abs/2410.08260) [![Project Page](https://img.shields.io/badge/Project-Website-green)](https://koala36m.github.io/) 
 [![🤗Hugging Face Dataset](https://img.shields.io/badge/🤗HF-Dataset-yellow)](https://huggingface.co/datasets/Koala-36M/Koala-36M-v1)
