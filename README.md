@@ -91,6 +91,8 @@ To predict the VTSS of the video, you can download the checkpoint from [here](ht
 ```
 cd training_suitability_assessment
 pip install -e .
+mkdir ckpt
+huggingface-cli download --resume-download Koala-36M/Training_Suitability_Assessment --local-dir ckpt
 python inference.py
 ```
 
