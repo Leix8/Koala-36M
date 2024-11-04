@@ -97,7 +97,7 @@ python inference.py
 
 ## License
 
-The video samples are collected from a publicly available dataset.
+See [license](https://github.com/KwaiVGI/Koala-36M/blob/main/LICENSE). The video samples are collected from a publicly available dataset.
 Users must follow [the related license](https://raw.githubusercontent.com/microsoft/XPretrain/main/hd-vila-100m/LICENSE) to use these video samples.
 
 ## Citation
