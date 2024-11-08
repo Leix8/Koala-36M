@@ -86,11 +86,11 @@ we develop a Video Training Suitability Score (VTSS)
 that integrates multiple sub-metrics, allowing us to filter high-quality videos from
 the original corpus.
 
-To predict the VTSS of the video, you can download the checkpoint from [here](https://huggingface.co/Koala-36M/Training_Suitability_Assessment), then you can run :
+We release a base version of the scoring model. To predict the VTSS of the video,  you can download the checkpoint from [here](https://huggingface.co/Koala-36M/Training_Suitability_Assessment), you can run :
 
 ```
 cd training_suitability_assessment
-pip install -e .
+pip install -r requirements.txt
 mkdir ckpt
 huggingface-cli download --resume-download Koala-36M/Training_Suitability_Assessment --local-dir ckpt
 python inference.py
