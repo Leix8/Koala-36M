@@ -1,4 +1,4 @@
-# 🐨 Koala-36M
+# 🐨 Koala-36M [CVPR2025]
 <div align="center">
 
 ## A Large-scale Video Dataset Improving Consistency between Fine-grained Conditions and Video Content
