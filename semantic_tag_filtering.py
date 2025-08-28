@@ -5,6 +5,9 @@ from datasets import load_dataset
 import json
 import sys
 import os
+from datetime import datetime
+import ast  # safer than eval
+
 
 def load_dataset_auto(path, sample=None, num_shards=1000, shard_index=0, est_size=36_000_000):
     """
@@ -36,7 +39,7 @@ def load_dataset_auto(path, sample=None, num_shards=1000, shard_index=0, est_siz
 
         end = start + shard_size
         ds = ds.skip(start).take(shard_size)
-        print(f"🧩 Streaming shard {shard_index}/{num_shards}, rows [{start}-{end})")
+        print(f"🧩 Streaming shard {shard_index}/{num_shards}, rows [{start}-{end-1}]")
 
     # ✅ Collect rows into a DataFrame
     rows = []
@@ -46,6 +49,7 @@ def load_dataset_auto(path, sample=None, num_shards=1000, shard_index=0, est_siz
             break
 
     return pd.DataFrame(rows)
+
 
 def load_tags(tags_arg):
     """Load tags from a comma-separated string, a .txt file, or a JSON file.
@@ -79,17 +83,35 @@ def load_tags(tags_arg):
 
 
 def find_tags(caption, tags, tag_embeddings, model, threshold=0.4, semantic=True):
-    """Return list of tags matched in caption (semantic or exact)."""
+    """Return list of (tag, score) tuples matched in caption (semantic or exact)."""
     if semantic:
         caption_emb = model.encode(
             caption, convert_to_tensor=True, normalize_embeddings=True
         )
         cos_scores = util.cos_sim(caption_emb, tag_embeddings)[0]
-        return [tags[i] for i, score in enumerate(cos_scores) if score >= threshold]
+        return [(tags[i], float(score)) for i, score in enumerate(cos_scores) if score >= threshold]
     else:
-        # Simple exact substring matching
-        return [tag for tag in tags if tag.lower() in caption.lower()]
+        # Simple exact substring matching, score=1.0
+        return [(tag, 1.0) for tag in tags if tag.lower() in caption.lower()]
 
+def parse_time_to_seconds(time_str):
+    try:
+        t = datetime.strptime(time_str, "%H:%M:%S.%f")
+    except ValueError:
+        t = datetime.strptime(time_str, "%H:%M:%S")  # fallback if no ms
+    return t.hour * 3600 + t.minute * 60 + t.second + (t.microsecond / 1e6)
+
+
+def extract_duration(ts_str):
+    try:
+        ts_list = ast.literal_eval(ts_str)  # turn string into Python list
+        if isinstance(ts_list, (list, tuple)) and len(ts_list) == 2:
+            start = parse_time_to_seconds(ts_list[0])
+            end = parse_time_to_seconds(ts_list[1])
+            return end - start
+    except Exception:
+        return None
+    return None
 
 def main():
     parser = argparse.ArgumentParser(
@@ -121,7 +143,7 @@ def main():
     args = parser.parse_args()
 
     # 1. Load dataset
-    df = load_dataset_auto(args.input, sample=args.sample, num_shards = args.num_shards, shard_index = args.shard_index)
+    df = load_dataset_auto(args.input, sample=args.sample, num_shards=args.num_shards, shard_index=args.shard_index)
     print(f"🔄 Loaded dataset with {len(df)} rows from {args.input}")
 
     if args.sample:
@@ -140,28 +162,35 @@ def main():
         model, tag_embeddings = None, None
 
     # 4. Apply filtering
-    
     df["matched_tags"] = df["caption"].apply(
-        lambda cap: find_tags(cap, tags, tag_embeddings, model,
-                              threshold=args.threshold, semantic=args.semantic)
+        lambda cap: {tags[i]: float(score) for i, score in enumerate(util.cos_sim(
+            model.encode(cap, convert_to_tensor=True, normalize_embeddings=True), tag_embeddings
+        )[0]) if score >= args.threshold}
     )
 
+    # ✅ Add duration field
+    if "start" in df.columns and "end" in df.columns:
+        df["duration"] = df["end"] - df["start"]
+    elif "timestamp" in df.columns:
+        df["duration"] = df["timestamp"].apply(extract_duration)
+    else:
+        df["duration"] = None
+
+    # ✅ Keep only rows with matches
     filtered = df[df["matched_tags"].map(len) > 0]
 
     # 5. Save outputs
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Build output paths
     parquet_out = os.path.join(args.output_dir, f"{args.output_prefix}.parquet")
     jsonl_out   = os.path.join(args.output_dir, f"{args.output_prefix}.jsonl")
 
-    # Save results
     filtered.to_parquet(parquet_out, index=False)
     filtered.to_json(jsonl_out, orient="records", lines=True)
 
     print(f"✅ Filtered dataset contains {len(filtered)} rows out of {len(df)}")
     print(f"✅ Saved to: {parquet_out}, {jsonl_out}")
 
+
 if __name__ == "__main__":
     main()
-
