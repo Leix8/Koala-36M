@@ -1,0 +1,26 @@
+name: koala36m
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - pyarrow
+  - fastparquet
+  - tqdm
+  - pip:
+      # --- GPU-accelerated PyTorch stack ---
+      - torch
+      - torchvision
+      - torchaudio
+      # --- Hugging Face / embeddings ---
+      - sentence-transformers
+      - transformers
+      - datasets 
+      # --- Vector search (optional) ---
+      - faiss-gpu
+      - qdrant-client
