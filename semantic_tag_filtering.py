@@ -1,6 +1,7 @@
 import argparse
 import pandas as pd
 from sentence_transformers import SentenceTransformer, util
+from accelerate import Accelerator
 from datasets import load_dataset
 import json
 import sys
@@ -114,6 +115,9 @@ def extract_duration(ts_str):
     return None
 
 def main():
+    
+    accelerator = Accelerator()
+
     parser = argparse.ArgumentParser(
         description="Filter Koala-36M dataset based on semantic similarity to tags."
     )
@@ -157,6 +161,9 @@ def main():
     if args.semantic:
         print(f"🔄 Loading model: {args.model}")
         model = SentenceTransformer(args.model)
+        model = accelerator.prepare(model)
+        if hasattr(model, "module"):   # if wrapped
+            model.encode = model.module.encode  
         tag_embeddings = model.encode(tags, convert_to_tensor=True, normalize_embeddings=True)
     else:
         model, tag_embeddings = None, None

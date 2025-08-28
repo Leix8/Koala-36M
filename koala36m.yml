@@ -24,3 +24,5 @@ dependencies:
       # --- Vector search (optional) ---
       - faiss-gpu
       - qdrant-client
+      # -- multi-GPU acceleration
+      - accelerate
