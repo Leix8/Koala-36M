@@ -26,3 +26,6 @@ dependencies:
       - qdrant-client
       # -- multi-GPU acceleration
       - accelerate
+      # -- multi-thread and parallel optimization
+      - swifter 
+      - pandarallel

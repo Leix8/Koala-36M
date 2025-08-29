@@ -1,6 +1,7 @@
 import argparse
 import pandas as pd
 import numpy as np
+import torch
 from sentence_transformers import SentenceTransformer, util
 from accelerate import Accelerator
 from datasets import load_dataset
@@ -10,7 +11,8 @@ from datetime import datetime
 import ast
 import math
 from collections import Counter
-
+from pandarallel import pandarallel
+pandarallel.initialize(progress_bar = False)
 
 def load_dataset_auto(path, sample=None, num_shards=1000, shard_index=0, est_size=36_000_000):
     """Load Hugging Face dataset in streaming mode with simulated sharding."""
@@ -91,13 +93,13 @@ def main():
     parser.add_argument("--tags", type=str, default="./tags.txt")
     parser.add_argument("--model", type=str, default="sentence-transformers/all-MiniLM-L6-v2")
     parser.add_argument("--threshold", type=float, default=0.45)
-    parser.add_argument("--batch_size", type=int, default=1024)
     parser.add_argument("--sample", type=int, default=None)
-    parser.add_argument("--num_shards", type=int, default=10000)
+    parser.add_argument("--num_shards", type=int, default=1000)
     parser.add_argument("--shard_index", type=int, default=0)
     parser.add_argument("--not_semantic", action="store_true")
     parser.add_argument("--min_duration", type=float, default=0.0)
     parser.add_argument("--max_duration", type=float, default=math.inf)
+    parser.add_argument("--batch_size", type=int, default=1024, help="Batch size for encoding captions.")
 
     args = parser.parse_args()
 
@@ -114,11 +116,11 @@ def main():
     if "start" in df.columns and "end" in df.columns:
         df["duration"] = df["end"] - df["start"]
     elif "timestamp" in df.columns:
-        df["duration"] = df["timestamp"].apply(extract_duration)
+        df["duration"] = df["timestamp"].parallel_apply(extract_duration)
     else:
         df["duration"] = None
 
-    # ✅ Duration stats for ALL rows (before filtering)
+    # ✅ Duration stats for ALL rows
     duration_series_full = df["duration"].dropna()
     bins = list(range(0, 301, 5)) + [float("inf")]
     labels = [f"{bins[i]}-{bins[i+1]}s" if bins[i+1] != float("inf") else ">300s"
@@ -149,33 +151,35 @@ def main():
         model = accelerator.prepare(model)
         if hasattr(model, "module"):
             model.encode = model.module.encode
-        tag_embeddings = model.encode(tags, convert_to_tensor=True, normalize_embeddings=True, batch_size = args.batch_size)
+        tag_embeddings = model.encode(tags, convert_to_tensor=True, normalize_embeddings=True)
     else:
         model, tag_embeddings = None, None
 
-    # 5. Apply semantic filtering
-    # Get all captions as a list
-    captions = df["caption"].tolist()
+    # 5. Apply semantic filtering (vectorized + GPU mask)
+    if not args.not_semantic:
+        captions = df["caption"].tolist()
+        caption_embs = model.encode(
+            captions,
+            batch_size=args.batch_size,
+            convert_to_tensor=True,
+            normalize_embeddings=True,
+            show_progress_bar=True
+        )
 
-    # Encode all captions in large batches
-    caption_embs = model.encode(
-        captions,
-        batch_size=args.batch_size,     # new CLI arg, e.g. 512 or 1024
-        convert_to_tensor=True,
-        normalize_embeddings=True,
-        show_progress_bar=True
-    )
+        cos_scores = util.cos_sim(caption_embs, tag_embeddings)  # [num_captions, num_tags]
 
-    # Compute cosine similarity for all rows at once
-    cos_scores = util.cos_sim(caption_embs, tag_embeddings)  # shape: [num_captions, num_tags]
+        mask = cos_scores >= args.threshold
+        indices = mask.nonzero(as_tuple=False).cpu().numpy()  # matched (row, col)
 
-    # Build matched_tags column
-    matched_tags = []
-    for row in cos_scores:
-        matches = {tags[i]: float(score) for i, score in enumerate(row) if score >= args.threshold}
-        matched_tags.append(matches)
-
-    df["matched_tags"] = matched_tags
+        matched_tags = [dict() for _ in range(cos_scores.size(0))]
+        for row, col in indices:
+            matched_tags[row][tags[col]] = float(cos_scores[row, col])
+        df["matched_tags"] = matched_tags
+    else:
+        # fallback exact matching
+        df["matched_tags"] = df["caption"].apply(
+            lambda cap: {tag: 1.0 for tag in tags if tag.lower() in cap.lower()}
+        )
 
     filtered = df[df["matched_tags"].map(len) > 0]
     num_row_semantic = len(filtered)
@@ -184,18 +188,10 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     width = len(str(args.num_shards))
-    parquet_out = os.path.join(
-        args.output_dir,
-        f"{args.output_prefix}_shard{args.shard_index:0{width}d}_of{args.num_shards}.parquet"
-    )
-    jsonl_out = os.path.join(
-        args.output_dir,
-        f"{args.output_prefix}_shard{args.shard_index:0{width}d}_of{args.num_shards}.jsonl"
-    )
-    log_out = os.path.join(
-        args.output_dir,
-        f"{args.output_prefix}_shard{args.shard_index:0{width}d}_of{args.num_shards}_log.json"
-    )
+    base = f"{args.output_prefix}_shard{args.shard_index:0{width}d}_of{args.num_shards}"
+    parquet_out = os.path.join(args.output_dir, f"{base}.parquet")
+    jsonl_out   = os.path.join(args.output_dir, f"{base}.jsonl")
+    log_out     = os.path.join(args.output_dir, f"{base}_log.json")
 
     filtered.to_parquet(parquet_out, index=False)
     filtered.to_json(jsonl_out, orient="records", lines=True)
