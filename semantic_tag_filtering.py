@@ -11,6 +11,7 @@ from datetime import datetime
 import ast
 import math
 from collections import Counter
+import swifter
 from pandarallel import pandarallel
 pandarallel.initialize(progress_bar = False)
 
@@ -191,7 +192,7 @@ def main():
     base = f"{args.output_prefix}_shard{args.shard_index:0{width}d}_of{args.num_shards}"
     parquet_out = os.path.join(args.output_dir, f"{base}.parquet")
     jsonl_out   = os.path.join(args.output_dir, f"{base}.jsonl")
-    log_out     = os.path.join(args.output_dir, f"{base}_log.json")
+    log_out     = os.path.join(args.output_dir, f"{base}_stats.json")
 
     filtered.to_parquet(parquet_out, index=False)
     filtered.to_json(jsonl_out, orient="records", lines=True)
