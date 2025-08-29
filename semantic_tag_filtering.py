@@ -12,8 +12,10 @@ import ast
 import math
 from collections import Counter
 import swifter
-from pandarallel import pandarallel
-pandarallel.initialize(progress_bar = False)
+# from pandarallel import pandarallel
+# pandarallel.initialize(progress_bar = False)
+import time
+
 
 def load_dataset_auto(path, sample=None, num_shards=1000, shard_index=0, est_size=36_000_000):
     """Load Hugging Face dataset in streaming mode with simulated sharding."""
@@ -40,26 +42,65 @@ def load_dataset_auto(path, sample=None, num_shards=1000, shard_index=0, est_siz
             break
     return pd.DataFrame(rows)
 
-
 def load_tags(tags_arg):
-    """Load tags from a comma-separated string, a .txt file, or a JSON file."""
+    """Load tags from a comma-separated string, a .txt file, or a JSON file.
+    Robust to quotes, extra spaces, and structured JSON dicts.
+    """
     def clean(tag: str) -> str:
-        tag = tag.strip().strip(",")
-        while tag.startswith(("'", '"')) and tag.endswith(("'", '"')) and len(tag) > 1:
+        if not isinstance(tag, str):
+            tag = str(tag)
+        # strip whitespace and trailing commas/semicolons
+        tag = tag.strip().strip(",;")
+        # strip surrounding brackets if passed accidentally
+        tag = tag.strip("[]{}")
+        # remove surrounding quotes repeatedly if present
+        while len(tag) > 1 and tag[0] in ("'", '"') and tag[-1] in ("'", '"'):
             tag = tag[1:-1].strip()
         return tag
 
-    if tags_arg.endswith(".json"):
-        with open(tags_arg, "r") as f:
-            tags = json.load(f)
-    elif tags_arg.endswith(".txt"):
-        with open(tags_arg, "r") as f:
-            tags = [line.strip() for line in f if line.strip()]
-    else:
-        tags = [tag.strip() for tag in tags_arg.split(",") if tag.strip()]
+    tags = []
 
-    tags = [clean(tag) for tag in tags]
-    return list(dict.fromkeys([t for t in tags if t]))
+    if isinstance(tags_arg, (list, tuple)):
+        # Already a list of tags
+        tags = tags_arg
+
+    elif isinstance(tags_arg, str):
+        if os.path.isfile(tags_arg):
+            # File path input
+            if tags_arg.endswith(".json"):
+                with open(tags_arg, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                # flatten JSON if it’s a dict of categories
+                if isinstance(data, dict):
+                    for v in data.values():
+                        if isinstance(v, list):
+                            tags.extend(v)
+                elif isinstance(data, list):
+                    tags = data
+                else:
+                    raise ValueError("Unsupported JSON structure for tags")
+            elif tags_arg.endswith(".txt"):
+                with open(tags_arg, "r", encoding="utf-8") as f:
+                    for line in f:
+                        tags.extend(line.split(","))
+            else:
+                raise ValueError("Unsupported file format: must be .txt or .json")
+        else:
+            # Treat as raw comma-separated string
+            tags = tags_arg.split(",")
+    else:
+        raise TypeError("tags_arg must be a string, list, or tuple")
+
+    # Final cleaning + deduplication (preserve order)
+    cleaned = []
+    seen = set()
+    for tag in tags:
+        ct = clean(tag)
+        if ct and ct not in seen:
+            cleaned.append(ct)
+            seen.add(ct)
+
+    return cleaned
 
 
 def parse_time_to_seconds(time_str):
@@ -91,7 +132,7 @@ def main():
     parser.add_argument("--input", type=str, default="Koala-36M/Koala-36M-v1")
     parser.add_argument("--output_prefix", type=str, default="Koala36M_filtered")
     parser.add_argument("--output_dir", type=str, default="./filtered")
-    parser.add_argument("--tags", type=str, default="./tags.txt")
+    parser.add_argument("--tags", type=str, default="./tags_v1_enhanced.txt")
     parser.add_argument("--model", type=str, default="sentence-transformers/all-MiniLM-L6-v2")
     parser.add_argument("--threshold", type=float, default=0.45)
     parser.add_argument("--sample", type=int, default=None)
@@ -105,21 +146,28 @@ def main():
     args = parser.parse_args()
 
     # 1. Load dataset
+    start = time.perf_counter()
     df = load_dataset_auto(args.input, sample=args.sample,
                            num_shards=args.num_shards, shard_index=args.shard_index)
     num_row_full = len(df)
     print(f"🔄 Loaded dataset with {num_row_full} rows from {args.input}")
+    end = time.perf_counter()
+    print(f"⏱️ dataset loading time: {end - start:.4f} seconds")
 
     if args.sample:
         df = df.sample(args.sample, random_state=42)
 
+    
     # 2. Compute duration first
+    start = time.perf_counter()
     if "start" in df.columns and "end" in df.columns:
         df["duration"] = df["end"] - df["start"]
     elif "timestamp" in df.columns:
-        df["duration"] = df["timestamp"].parallel_apply(extract_duration)
+        df["duration"] = df["timestamp"].swifter.apply(extract_duration)
     else:
         df["duration"] = None
+    end = time.perf_counter()
+    print(f"⏱️ duration calculation time: {end - start:.4f} seconds")
 
     # ✅ Duration stats for ALL rows
     duration_series_full = df["duration"].dropna()
@@ -142,6 +190,7 @@ def main():
         return
 
     # 3. Load tags
+    start = time.perf_counter()
     tags = load_tags(args.tags)
     print(f"🔄 Loaded {len(tags)} tags, samples: {tags[:10]}")
 
@@ -155,8 +204,11 @@ def main():
         tag_embeddings = model.encode(tags, convert_to_tensor=True, normalize_embeddings=True)
     else:
         model, tag_embeddings = None, None
+    end = time.perf_counter()
+    print(f"⏱️ tag loading and encoding time: {end - start:.4f} seconds")
 
     # 5. Apply semantic filtering (vectorized + GPU mask)
+    start = time.perf_counter()
     if not args.not_semantic:
         captions = df["caption"].tolist()
         caption_embs = model.encode(
@@ -184,8 +236,11 @@ def main():
 
     filtered = df[df["matched_tags"].map(len) > 0]
     num_row_semantic = len(filtered)
+    end = time.perf_counter()
+    print(f"⏱️ caption encoding and filtering time: {end - start:.4f} seconds")
 
     # 6. Save outputs
+    start = time.perf_counter()
     os.makedirs(args.output_dir, exist_ok=True)
 
     width = len(str(args.num_shards))
@@ -226,6 +281,8 @@ def main():
 
     with open(log_out, "w") as f:
         json.dump(log_data, f, indent=2)
+    end = time.perf_counter()
+    print(f"⏱️ result saving time: {end - start:.4f} seconds")
 
     print(f"✅ Filtered dataset contains {num_row_semantic} rows")
     print(f"✅ Saved to: {parquet_out}, {jsonl_out}")
