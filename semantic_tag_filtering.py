@@ -91,6 +91,7 @@ def main():
     parser.add_argument("--tags", type=str, default="./tags.txt")
     parser.add_argument("--model", type=str, default="sentence-transformers/all-MiniLM-L6-v2")
     parser.add_argument("--threshold", type=float, default=0.45)
+    parser.add_argument("--batch_size", type=int, default=1024)
     parser.add_argument("--sample", type=int, default=None)
     parser.add_argument("--num_shards", type=int, default=10000)
     parser.add_argument("--shard_index", type=int, default=0)
@@ -148,16 +149,33 @@ def main():
         model = accelerator.prepare(model)
         if hasattr(model, "module"):
             model.encode = model.module.encode
-        tag_embeddings = model.encode(tags, convert_to_tensor=True, normalize_embeddings=True)
+        tag_embeddings = model.encode(tags, convert_to_tensor=True, normalize_embeddings=True, batch_size = args.batch_size)
     else:
         model, tag_embeddings = None, None
 
     # 5. Apply semantic filtering
-    df["matched_tags"] = df["caption"].apply(
-        lambda cap: {tags[i]: float(score) for i, score in enumerate(util.cos_sim(
-            model.encode(cap, convert_to_tensor=True, normalize_embeddings=True), tag_embeddings
-        )[0]) if score >= args.threshold}
+    # Get all captions as a list
+    captions = df["caption"].tolist()
+
+    # Encode all captions in large batches
+    caption_embs = model.encode(
+        captions,
+        batch_size=args.batch_size,     # new CLI arg, e.g. 512 or 1024
+        convert_to_tensor=True,
+        normalize_embeddings=True,
+        show_progress_bar=True
     )
+
+    # Compute cosine similarity for all rows at once
+    cos_scores = util.cos_sim(caption_embs, tag_embeddings)  # shape: [num_captions, num_tags]
+
+    # Build matched_tags column
+    matched_tags = []
+    for row in cos_scores:
+        matches = {tags[i]: float(score) for i, score in enumerate(row) if score >= args.threshold}
+        matched_tags.append(matches)
+
+    df["matched_tags"] = matched_tags
 
     filtered = df[df["matched_tags"].map(len) > 0]
     num_row_semantic = len(filtered)
