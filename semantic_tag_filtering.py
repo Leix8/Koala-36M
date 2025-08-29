@@ -1,13 +1,15 @@
 import argparse
 import pandas as pd
+import numpy as np
 from sentence_transformers import SentenceTransformer, util
 from accelerate import Accelerator
 from datasets import load_dataset
 import json
 import os
 from datetime import datetime
-import ast  # safer than eval
+import ast
 import math
+from collections import Counter
 
 
 def load_dataset_auto(path, sample=None, num_shards=1000, shard_index=0, est_size=36_000_000):
@@ -93,10 +95,8 @@ def main():
     parser.add_argument("--num_shards", type=int, default=10000)
     parser.add_argument("--shard_index", type=int, default=0)
     parser.add_argument("--not_semantic", action="store_true")
-    parser.add_argument("--min_duration", type=float, default=0.0,
-                        help="Minimum duration (seconds) to keep (default: 0).")
-    parser.add_argument("--max_duration", type=float, default=math.inf,
-                        help="Maximum duration (seconds) to keep (default: inf).")
+    parser.add_argument("--min_duration", type=float, default=0.0)
+    parser.add_argument("--max_duration", type=float, default=math.inf)
 
     args = parser.parse_args()
 
@@ -117,17 +117,22 @@ def main():
     else:
         df["duration"] = None
 
+    # ✅ Duration stats for ALL rows (before filtering)
+    duration_series_full = df["duration"].dropna()
+    bins = list(range(0, 301, 5)) + [float("inf")]
+    labels = [f"{bins[i]}-{bins[i+1]}s" if bins[i+1] != float("inf") else ">300s"
+              for i in range(len(bins)-1)]
+    binned_full = pd.cut(duration_series_full, bins=bins, labels=labels, right=False)
+    duration_distribution_full = binned_full.value_counts().sort_index()
+    duration_distribution_full = {str(label): int(count) for label, count in duration_distribution_full.items()}
+
     # ✅ Filter only valid durations in range
     df = df[(df["duration"].notnull()) &
             (df["duration"] >= args.min_duration) &
             (df["duration"] <= args.max_duration)]
     num_row_duration = len(df)
-    print(f"✅ Duration range: [{args.min_duration}, {args.max_duration}] seconds")
-    print(f"✅ Filtered dataset contains {num_row_duration} rows out of {num_row_full} after duration filter")
+    print(f"✅ Duration filter: {num_row_duration}/{num_row_full} rows kept")
 
-    return
-    
-    # If no rows left, exit early
     if len(df) == 0:
         print("⚠️ No rows passed duration filter. Exiting.")
         return
@@ -147,7 +152,7 @@ def main():
     else:
         model, tag_embeddings = None, None
 
-    # 5. Apply semantic filtering on duration-filtered data
+    # 5. Apply semantic filtering
     df["matched_tags"] = df["caption"].apply(
         lambda cap: {tags[i]: float(score) for i, score in enumerate(util.cos_sim(
             model.encode(cap, convert_to_tensor=True, normalize_embeddings=True), tag_embeddings
@@ -159,9 +164,8 @@ def main():
 
     # 6. Save outputs
     os.makedirs(args.output_dir, exist_ok=True)
-    
+
     width = len(str(args.num_shards))
-    # Build file names
     parquet_out = os.path.join(
         args.output_dir,
         f"{args.output_prefix}_shard{args.shard_index:0{width}d}_of{args.num_shards}.parquet"
@@ -170,12 +174,47 @@ def main():
         args.output_dir,
         f"{args.output_prefix}_shard{args.shard_index:0{width}d}_of{args.num_shards}.jsonl"
     )
+    log_out = os.path.join(
+        args.output_dir,
+        f"{args.output_prefix}_shard{args.shard_index:0{width}d}_of{args.num_shards}_log.json"
+    )
 
     filtered.to_parquet(parquet_out, index=False)
     filtered.to_json(jsonl_out, orient="records", lines=True)
 
-    print(f"✅ Filtered dataset contains {num_row_semantic} rows out of {num_row_duration} after semantic filter")
+    # 7. Build log data
+    tag_counter = Counter()
+    for row in filtered["matched_tags"]:
+        tag_counter.update(row.keys())
+
+    log_data = {
+        "timestamp": datetime.now().isoformat(),
+        "input": args.input,
+        "shard_index": args.shard_index,
+        "num_shards": args.num_shards,
+        "total_rows_loaded": num_row_full,
+        "rows_after_duration_filter": num_row_duration,
+        "rows_after_semantic_filter": num_row_semantic,
+        "min_duration": args.min_duration,
+        "max_duration": args.max_duration,
+        "duration_stats_full": {
+            "min": float(duration_series_full.min()) if not duration_series_full.empty else None,
+            "max": float(duration_series_full.max()) if not duration_series_full.empty else None,
+            "mean": float(duration_series_full.mean()) if not duration_series_full.empty else None,
+            "median": float(duration_series_full.median()) if not duration_series_full.empty else None,
+            "distribution": duration_distribution_full
+        },
+        "tags_total": len(tags),
+        "tag_match_counts": {tag: int(count) for tag, count in tag_counter.items()},
+        "top_tags": tag_counter.most_common(20),
+    }
+
+    with open(log_out, "w") as f:
+        json.dump(log_data, f, indent=2)
+
+    print(f"✅ Filtered dataset contains {num_row_semantic} rows")
     print(f"✅ Saved to: {parquet_out}, {jsonl_out}")
+    print(f"📝 Log saved to: {log_out}")
 
 
 if __name__ == "__main__":
