@@ -29,3 +29,5 @@ dependencies:
       # -- multi-thread and parallel optimization
       - swifter 
       - pandarallel
+      # -- utils
+      - matplotlib
