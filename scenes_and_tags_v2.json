@@ -1,0 +1,36 @@
+{
+  "landscape and traveling": [
+    "aerial view", "airship", "aurora", "beach", "boat", "canoe", "cliff", "coral reef",
+     "cruise ship", "desert", "diving", "extraordinary scenery", "forest", "glacier", "grassland",
+      "hot air balloon", "island", "kayak", "lake", "lava", "meadow", "milky way", "moon",
+       "mountain", "mountain road", "rainbow", "rice field", "river", "sailboat", 
+       "snorkeling", "snow", "snowball", "starry sky", "sunrise", "sunset", "surfing", "terraced fields", 
+       "tornado", "valley", "volcano", "waterfall", "wheat field", "wetland", "yacht"
+  ],
+  "family and parenting": [
+    "parent-child performance", "baby learning to ride bike", "baby crying", "baby crawling", "baby laughing",
+  "baby walking", "baby sleeping", "baby yawning", "baby clapping", "baby waving", "baby pointing",
+  "baby talking", "toddler playing", "toddler dancing", "child running", "child jumping", "holding baby", "carrying baby",
+  "lifting child", "piggyback ride", "family hug", "family meal", "family picnic", "birthday party", "opening gifts",
+  "blowing candles", "bedtime story", "stroller ride", "first steps", "parents teaching", "playing with toys", "sandbox play",
+  "seesaw", "swinging", "sliding", "riding scooter", "riding tricycle", "chasing bubbles", "group hug"
+  ],
+  "daily life": ["city walk", "bar", "café", "coffee shop", "street food", "street market", "night market", "shopping mall", "library", 
+  "church", "alley", "courtyard", "indoor shop", "bookstore", "classroom", "school", "restaurant", "park", "zoo",
+   "parking lot", "playground", "garden", "residential area", "building", "house", "apartment", "road", "highway",
+    "street", "crosswalk", "traffic light", "pedestrian", "bus", "bicycle", "bike", "car", "taxi", "motorcycle", "scooter", 
+    "bridge", "overpass", "underpass", "subway train", "metro", "railway vehicle", "train", "subway platform", "all food", 
+    "staple food", "rice", "noodles", "bread", "pasta", "baking", "cake", "cookies", "pastry", "pie", "tart", "dessert",
+     "ice cream", "pudding", "candy", "chocolate", "snacks", "chips", "popcorn", "nuts", "fruit", "vegetables", "salad", "soup", 
+     "stew", "meat", "seafood", "sushi", "barbecue", "hot pot", "pizza", "burger", "sandwich", "dumplings", "alcohol", "wine",
+      "beer", "cocktail", "beverage", "tea", "coffee", "juice", "milk", "soda", "smoothie", "milkshake", "dishes", "fast food",
+       "breakfast", "brunch", "lunch", "dinner", "buffet", "takeout", "delivery", "food market", "farmers market"
+      ],
+  "sports and workout": 
+    ["scoring goal", "slam dunk", "three pointer", "spike", "serve", "rally", "home run", "touchdown", 
+    "penalty kick", "free throw", "knockout punch", "submission hold", "lifting weights", "flexing muscles", 
+    "showing abs", "running on treadmill", "boxing training", "shadowboxing", "sparring", "jump rope", "battle ropes", 
+    "kettlebell swing", "medicine ball throw", "agility ladder", "stretching routine", "warm up", "cool down", 
+    "personal training", "group workout", "outdoor workout", "fitness class", "gym selfie"
+  ]
+}
