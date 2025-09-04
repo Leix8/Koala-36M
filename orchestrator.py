@@ -21,24 +21,24 @@ def main():
     # Orchestrator-only args
     parser.add_argument("--worker", default="semantic_tag_filtering.py",
                         help="Path to the worker script.")
-    parser.add_argument("--num-shards", type=int, default = 1000,
+    parser.add_argument("--num_shards", type=int, default = 1000,
                         help="Total number of shards.")
     parser.add_argument("--start", type=int, default=0,
                         help="First shard index to process (inclusive).")
     parser.add_argument("--end", type=int, default=None,
                         help="Last shard index to process (inclusive). Defaults to num_shards-1.")
-    parser.add_argument("--gpu-ids", type=str, default=('0,1,2,3,4,5'),
+    parser.add_argument("--gpu_ids", type=str, default=('0,1,2,3,4,5'),
                         help="Comma-separated GPU IDs (e.g. '0,1,2,3'). If omitted, uses all visible GPUs.")
-    parser.add_argument("--output-dir", type=str, default = "./filtered",
+    parser.add_argument("--output_dir", type=str, default = "./filtered",
                         help="Output directory (must match worker's).")
-    parser.add_argument("--output-prefix", type=str, default = "koala-36m",
+    parser.add_argument("--output_prefix", type=str, default = "koala-36m",
                         help="Output prefix (must match worker's).")
     parser.add_argument("--accelerate-mixed-precision", default="fp16",
                         choices=["no", "fp16", "bf16"],
                         help="Accelerate mixed precision mode.")
-    parser.add_argument("--skip-existing", action="store_true",
+    parser.add_argument("--skip_existing", action="store_true",
                         help="Skip a shard if its parquet already exists.")
-    parser.add_argument("--dry-run", action="store_true",
+    parser.add_argument("--dry_run", action="store_true",
                         help="Print commands without executing.")
 
     # Parse only known args → everything else goes to worker
